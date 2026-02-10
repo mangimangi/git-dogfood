@@ -2,7 +2,7 @@
 # Triggers vendor self-update after a successful Release.
 #
 # Bridges git-semver (Release event) to git-vendored (install-vendored workflow).
-# The .dogfood/resolve script finds the vendor with "dogfood": true in
+# The .dogfood/resolve script looks for the "git-dogfood" vendor key in
 # .vendored/config.json and triggers install-vendored for that vendor.
 #
 # Chain: version-bump → release → dogfood → install-vendored → PR → merge
