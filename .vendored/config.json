@@ -13,7 +13,6 @@
     "git-dogfood": {
       "repo": "mangimangi/git-dogfood",
       "install_branch": "chore/install-git-dogfood",
-      "dogfood": true,
       "protected": [".dogfood/**", ".github/workflows/dogfood.yml"]
     },
     "git-semver": {
