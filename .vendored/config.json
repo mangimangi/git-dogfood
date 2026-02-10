@@ -13,12 +13,12 @@
     "git-dogfood": {
       "repo": "mangimangi/git-dogfood",
       "install_branch": "chore/install-git-dogfood",
+      "dogfood": true,
       "protected": [".dogfood/**", ".github/workflows/dogfood.yml"]
     },
     "git-semver": {
       "repo": "mangimangi/git-semver",
       "install_branch": "chore/install-git-semver",
-      "dogfood": true,
       "protected": [".semver/**", ".github/workflows/version-bump.yml", ".github/workflows/release.yml"],
       "allowed": [".semver/config.json"]
     },
