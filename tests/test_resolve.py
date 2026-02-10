@@ -50,12 +50,10 @@ class TestFindDogfoodVendor:
     def test_finds_dogfood_vendor(self):
         config = {
             "vendors": {
-                "git-vendored": {"repo": "o/gv"},
-                "git-semver": {"repo": "o/gs", "dogfood": True},
-                "pearls": {"repo": "o/p"},
+                "git-dogfood": {"repo": "o/gd"},
             }
         }
-        assert resolve.find_dogfood_vendor(config) == "git-semver"
+        assert resolve.find_dogfood_vendor(config) == "git-dogfood"
 
     def test_returns_none_when_no_dogfood(self):
         config = {
@@ -66,30 +64,21 @@ class TestFindDogfoodVendor:
         }
         assert resolve.find_dogfood_vendor(config) is None
 
-    def test_returns_none_when_dogfood_false(self):
+    def test_finds_by_key_ignoring_other_vendors(self):
         config = {
             "vendors": {
-                "git-semver": {"repo": "o/gs", "dogfood": False},
+                "git-vendored": {"repo": "o/gv"},
+                "git-dogfood": {"repo": "o/gd"},
+                "pearls": {"repo": "o/p"},
             }
         }
-        assert resolve.find_dogfood_vendor(config) is None
+        assert resolve.find_dogfood_vendor(config) == "git-dogfood"
 
     def test_empty_vendors(self):
         assert resolve.find_dogfood_vendor({"vendors": {}}) is None
 
     def test_no_vendors_key(self):
         assert resolve.find_dogfood_vendor({}) is None
-
-    def test_first_dogfood_wins(self):
-        config = {
-            "vendors": {
-                "a": {"repo": "o/a", "dogfood": True},
-                "b": {"repo": "o/b", "dogfood": True},
-            }
-        }
-        # Should return first one found
-        result = resolve.find_dogfood_vendor(config)
-        assert result in ("a", "b")
 
 
 # ── Tests: load_vendor_config ──────────────────────────────────────────────
@@ -108,10 +97,10 @@ class TestLoadVendorConfig:
 
 class TestMain:
     def test_outputs_vendor(self, make_config, capsys):
-        make_config({"vendors": {"git-semver": {"repo": "o/gs", "dogfood": True}}})
+        make_config({"vendors": {"git-dogfood": {"repo": "o/gd"}}})
         resolve.main()
         out = capsys.readouterr().out
-        assert "vendor=git-semver" in out
+        assert "vendor=git-dogfood" in out
 
     def test_no_dogfood_no_output(self, make_config, capsys):
         make_config({"vendors": {"pearls": {"repo": "o/p"}}})
