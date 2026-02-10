@@ -4,15 +4,15 @@ Automated self-updating for vendored tools via GitHub Actions. When a tool relea
 
 ## How it works
 
-git-dogfood bridges a Release event to the vendor install workflow, creating a self-update loop:
+git-dogfood bridges the Bump & Release workflow to the vendor install workflow, creating a self-update loop:
 
 ```
-code change → version-bump → Release → dogfood.yml → install-vendored → PR → merge
+merge → Bump & Release → dogfood.yml → install-vendored → PR
 ```
 
-1. A code change on `main` triggers **version-bump** (via git-semver)
-2. version-bump creates a **Release**
-3. The Release triggers **dogfood.yml**, which runs `.dogfood/resolve` to find the `git-dogfood` vendor key in `.vendored/config.json`
+1. A code change merges to `main`, triggering **Bump & Release** (via git-semver)
+2. Bump & Release completes successfully
+3. This triggers **dogfood.yml**, which runs `.dogfood/resolve` to find the `git-dogfood` vendor key in `.vendored/config.json`
 4. dogfood.yml calls **install-vendored.yml** with the resolved vendor
 5. install-vendored downloads the new version and opens a **PR**
 6. The PR merges (manually or via automerge)
@@ -24,7 +24,7 @@ The version-bump workflow skips commits whose message starts with `chore: bump v
 ## Prerequisites
 
 - [git-vendored](https://github.com/mangimangi/git-vendored) — provides `.vendored/config.json` and the `install-vendored.yml` workflow
-- [git-semver](https://github.com/mangimangi/git-semver) — provides version bumping and the `Release` workflow
+- [git-semver](https://github.com/mangimangi/git-semver) — provides the `Bump & Release` workflow
 
 ## Installation
 
