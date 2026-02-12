@@ -4,6 +4,7 @@
 # Environment (v2 contract):
 #   VENDOR_REF        - Version/ref to install
 #   VENDOR_REPO       - GitHub repo (owner/name)
+#   VENDOR_MANIFEST   - Path to write file manifest
 #   VENDOR_INSTALL_DIR - Base directory for installed files
 #   GH_TOKEN          - Auth token for private repos
 #
@@ -15,6 +16,7 @@ set -euo pipefail
 VERSION="${VENDOR_REF:-${1:?Usage: install.sh <version> [<repo>]}}"
 DOGFOOD_REPO="${VENDOR_REPO:-${2:-mangimangi/git-dogfood}}"
 INSTALL_DIR="${VENDOR_INSTALL_DIR:-.dogfood}"
+INSTALLED_FILES=()
 
 # File download helper - uses gh api when GH_TOKEN is set, curl otherwise
 fetch_file() {
@@ -39,15 +41,22 @@ mkdir -p "$INSTALL_DIR" .github/workflows
 echo "Downloading resolve..."
 fetch_file "dogfood/resolve" "$INSTALL_DIR/resolve"
 chmod +x "$INSTALL_DIR/resolve"
+INSTALLED_FILES+=("$INSTALL_DIR/resolve")
 
 # Install workflow (first install only)
 if [ ! -f ".github/workflows/dogfood.yml" ]; then
     if fetch_file "templates/github/workflows/dogfood.yml" \
                   ".github/workflows/dogfood.yml" 2>/dev/null; then
         echo "Installed .github/workflows/dogfood.yml"
+        INSTALLED_FILES+=(".github/workflows/dogfood.yml")
     fi
 else
     echo "Workflow .github/workflows/dogfood.yml already exists, skipping"
+fi
+
+# Write manifest
+if [ -n "${VENDOR_MANIFEST:-}" ]; then
+    printf '%s\n' "${INSTALLED_FILES[@]}" > "$VENDOR_MANIFEST"
 fi
 
 echo ""

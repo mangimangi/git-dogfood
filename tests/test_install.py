@@ -215,6 +215,57 @@ class TestWorkflowInstall:
         assert "already exists, skipping" in result.stdout
 
 
+# ── Tests: Manifest emission ─────────────────────────────────────────────
+
+class TestManifest:
+    def test_manifest_written_when_env_set(self, work_dir, mock_curl):
+        manifest = work_dir / "manifest.txt"
+        result = _run_install(work_dir, mock_bin=mock_curl,
+                              env_extra={"VENDOR_MANIFEST": str(manifest)})
+        assert result.returncode == 0
+        assert manifest.exists()
+        lines = manifest.read_text().strip().splitlines()
+        assert ".dogfood/resolve" in lines
+
+    def test_manifest_includes_workflow_on_first_install(self, work_dir, mock_curl):
+        manifest = work_dir / "manifest.txt"
+        result = _run_install(work_dir, mock_bin=mock_curl,
+                              env_extra={"VENDOR_MANIFEST": str(manifest)})
+        assert result.returncode == 0
+        lines = manifest.read_text().strip().splitlines()
+        assert ".dogfood/resolve" in lines
+        assert ".github/workflows/dogfood.yml" in lines
+
+    def test_manifest_excludes_workflow_when_exists(self, work_dir, mock_curl):
+        # Pre-create the workflow
+        (work_dir / ".github" / "workflows").mkdir(parents=True)
+        (work_dir / ".github" / "workflows" / "dogfood.yml").write_text("# existing\n")
+
+        manifest = work_dir / "manifest.txt"
+        result = _run_install(work_dir, mock_bin=mock_curl,
+                              env_extra={"VENDOR_MANIFEST": str(manifest)})
+        assert result.returncode == 0
+        lines = manifest.read_text().strip().splitlines()
+        assert ".dogfood/resolve" in lines
+        assert ".github/workflows/dogfood.yml" not in lines
+
+    def test_no_manifest_when_env_unset(self, work_dir, mock_curl):
+        result = _run_install(work_dir, mock_bin=mock_curl)
+        assert result.returncode == 0
+        # No manifest file should be created anywhere in work_dir
+        manifests = list(work_dir.glob("manifest*"))
+        assert len(manifests) == 0
+
+    def test_manifest_uses_custom_install_dir(self, work_dir, mock_curl):
+        manifest = work_dir / "manifest.txt"
+        custom_dir = ".vendored/pkg/git-dogfood"
+        result = _run_install(work_dir, mock_bin=mock_curl,
+                              env_extra={"VENDOR_MANIFEST": str(manifest),
+                                         "VENDOR_INSTALL_DIR": custom_dir})
+        assert result.returncode == 0
+        lines = manifest.read_text().strip().splitlines()
+        assert f"{custom_dir}/resolve" in lines
+
 
 # ── Tests: Missing prerequisites ──────────────────────────────────────────
 
