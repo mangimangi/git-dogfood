@@ -1,6 +1,5 @@
 """Tests for install.sh — the git-dogfood installation script."""
 
-import json
 import os
 import stat
 import subprocess
@@ -144,27 +143,25 @@ class TestV2EnvVars:
         assert "new/repo" in result.stdout
 
 
-# ── Tests: Version file ───────────────────────────────────────────────────
+# ── Tests: V1 artifacts removed ──────────────────────────────────────────
 
-class TestVersionFile:
-    def test_version_file_written(self, work_dir, mock_curl):
+class TestV1ArtifactsRemoved:
+    def test_no_version_file_written(self, work_dir, mock_curl):
+        """V2 framework handles version tracking — install.sh must not write .version."""
         _run_install(work_dir, version="2.3.4", mock_bin=mock_curl)
-        version_file = work_dir / ".dogfood" / ".version"
-        assert version_file.exists()
-        assert version_file.read_text().strip() == "2.3.4"
+        assert not (work_dir / ".dogfood" / ".version").exists()
 
-    def test_version_file_overwritten_on_update(self, work_dir, mock_curl):
-        _run_install(work_dir, version="1.0.0", mock_bin=mock_curl)
-        _run_install(work_dir, version="2.0.0", mock_bin=mock_curl)
-        assert (work_dir / ".dogfood" / ".version").read_text().strip() == "2.0.0"
-
-    def test_version_file_under_custom_install_dir(self, work_dir, mock_curl):
-        custom_dir = ".vendored/pkg/git-dogfood"
-        _run_install(work_dir, version="4.0.0", mock_bin=mock_curl,
-                     env_extra={"VENDOR_INSTALL_DIR": custom_dir})
-        version_file = work_dir / custom_dir / ".version"
-        assert version_file.exists()
-        assert version_file.read_text().strip() == "4.0.0"
+    def test_vendor_config_not_modified(self, work_dir, mock_curl):
+        """V2 framework handles registration — install.sh must not touch config.json."""
+        import json
+        (work_dir / ".vendored").mkdir()
+        original = {"vendors": {"other-tool": {"repo": "o/ot"}}}
+        (work_dir / ".vendored" / "config.json").write_text(
+            json.dumps(original, indent=2) + "\n"
+        )
+        _run_install(work_dir, mock_bin=mock_curl)
+        config = json.loads((work_dir / ".vendored" / "config.json").read_text())
+        assert config == original
 
 
 # ── Tests: fetch_file fallback ─────────────────────────────────────────────
@@ -217,46 +214,6 @@ class TestWorkflowInstall:
         assert wf.read_text() == "# existing workflow\n"
         assert "already exists, skipping" in result.stdout
 
-
-# ── Tests: Vendor config registration ─────────────────────────────────────
-
-class TestVendorRegistration:
-    def test_registers_in_vendor_config(self, work_dir, mock_curl):
-        # Create prerequisite .vendored/config.json
-        (work_dir / ".vendored").mkdir()
-        (work_dir / ".vendored" / "config.json").write_text(
-            json.dumps({"vendors": {}}, indent=2) + "\n"
-        )
-
-        result = _run_install(work_dir, repo="mangimangi/git-dogfood", mock_bin=mock_curl)
-        assert result.returncode == 0
-
-        config = json.loads((work_dir / ".vendored" / "config.json").read_text())
-        assert "git-dogfood" in config["vendors"]
-        vendor = config["vendors"]["git-dogfood"]
-        assert vendor["repo"] == "mangimangi/git-dogfood"
-        assert vendor["install_branch"] == "chore/install-git-dogfood"
-        assert ".dogfood/**" in vendor["protected"]
-
-    def test_preserves_existing_vendors(self, work_dir, mock_curl):
-        (work_dir / ".vendored").mkdir()
-        (work_dir / ".vendored" / "config.json").write_text(
-            json.dumps({
-                "vendors": {"other-tool": {"repo": "o/ot"}}
-            }, indent=2) + "\n"
-        )
-
-        _run_install(work_dir, mock_bin=mock_curl)
-
-        config = json.loads((work_dir / ".vendored" / "config.json").read_text())
-        assert "other-tool" in config["vendors"]
-        assert "git-dogfood" in config["vendors"]
-
-    def test_no_registration_without_config(self, work_dir, mock_curl):
-        """If .vendored/config.json doesn't exist, skip registration."""
-        result = _run_install(work_dir, mock_bin=mock_curl)
-        assert result.returncode == 0
-        assert not (work_dir / ".vendored" / "config.json").exists()
 
 
 # ── Tests: Missing prerequisites ──────────────────────────────────────────

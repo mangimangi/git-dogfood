@@ -40,43 +40,14 @@ echo "Downloading resolve..."
 fetch_file "dogfood/resolve" "$INSTALL_DIR/resolve"
 chmod +x "$INSTALL_DIR/resolve"
 
-# Write version
-echo "$VERSION" > "$INSTALL_DIR/.version"
-echo "Installed git-dogfood v$VERSION"
-
-# Helper to install a workflow file (first install only)
-install_workflow() {
-    local workflow="$1"
-    if [ -f ".github/workflows/$workflow" ]; then
-        echo "Workflow .github/workflows/$workflow already exists, skipping"
-        return
+# Install workflow (first install only)
+if [ ! -f ".github/workflows/dogfood.yml" ]; then
+    if fetch_file "templates/github/workflows/dogfood.yml" \
+                  ".github/workflows/dogfood.yml" 2>/dev/null; then
+        echo "Installed .github/workflows/dogfood.yml"
     fi
-    if fetch_file "templates/github/workflows/$workflow" ".github/workflows/$workflow" 2>/dev/null; then
-        echo "Installed .github/workflows/$workflow"
-    fi
-}
-
-# Install workflow template (skipped if already present)
-install_workflow "dogfood.yml"
-
-# Register git-dogfood in .vendored/config.json (if present)
-if [ -f .vendored/config.json ]; then
-    python3 -c "
-import json
-with open('.vendored/config.json') as f:
-    config = json.load(f)
-config.setdefault('vendors', {})
-config['vendors']['git-dogfood'] = {
-    'repo': '$DOGFOOD_REPO',
-    'install_branch': 'chore/install-git-dogfood',
-    'protected': ['.dogfood/**', '.github/workflows/dogfood.yml'],
-    'allowed': ['.dogfood/.version']
-}
-with open('.vendored/config.json', 'w') as f:
-    json.dump(config, f, indent=2)
-    f.write('\n')
-"
-    echo "Registered git-dogfood in .vendored/config.json"
+else
+    echo "Workflow .github/workflows/dogfood.yml already exists, skipping"
 fi
 
 echo ""
