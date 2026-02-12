@@ -1,6 +1,5 @@
 """Tests for install.sh — the git-dogfood installation script."""
 
-import json
 import os
 import stat
 import subprocess
@@ -23,8 +22,17 @@ def _make_mock_bin(bin_dir: Path, name: str, script: str) -> Path:
 
 
 def _run_install(work_dir: Path, version: str = "1.0.0", repo: str = "o/gd",
-                 env_extra: dict = None, mock_bin: Path = None) -> subprocess.CompletedProcess:
-    """Run install.sh in work_dir with mock commands on PATH."""
+                 env_extra: dict = None, mock_bin: Path = None,
+                 use_env_vars: bool = False, positional_args: list = None) -> subprocess.CompletedProcess:
+    """Run install.sh in work_dir with mock commands on PATH.
+
+    Args:
+        use_env_vars: If True, pass version/repo via VENDOR_REF/VENDOR_REPO env vars
+                      instead of positional args.
+        positional_args: Override the positional args list entirely. If None,
+                         defaults to [version, repo] (unless use_env_vars=True,
+                         then no positional args).
+    """
     env = {
         "PATH": f"{mock_bin}:{os.environ['PATH']}" if mock_bin else os.environ["PATH"],
         "HOME": os.environ.get("HOME", "/root"),
@@ -32,8 +40,17 @@ def _run_install(work_dir: Path, version: str = "1.0.0", repo: str = "o/gd",
     if env_extra:
         env.update(env_extra)
 
+    if positional_args is not None:
+        args = positional_args
+    elif use_env_vars:
+        env["VENDOR_REF"] = version
+        env["VENDOR_REPO"] = repo
+        args = []
+    else:
+        args = [version, repo]
+
     return subprocess.run(
-        ["bash", INSTALL_SH, version, repo],
+        ["bash", INSTALL_SH] + args,
         cwd=work_dir,
         capture_output=True,
         text=True,
@@ -88,20 +105,63 @@ class TestDirectoryCreation:
         _run_install(work_dir, mock_bin=mock_curl)
         assert (work_dir / ".github" / "workflows").is_dir()
 
+    def test_creates_custom_install_dir(self, work_dir, mock_curl):
+        _run_install(work_dir, mock_bin=mock_curl,
+                     env_extra={"VENDOR_INSTALL_DIR": ".vendored/pkg/git-dogfood"})
+        assert (work_dir / ".vendored" / "pkg" / "git-dogfood").is_dir()
 
-# ── Tests: Version file ───────────────────────────────────────────────────
 
-class TestVersionFile:
-    def test_version_file_written(self, work_dir, mock_curl):
+# ── Tests: V2 env var inputs ─────────────────────────────────────────────
+
+class TestV2EnvVars:
+    def test_accepts_vendor_ref_and_repo(self, work_dir, mock_curl):
+        result = _run_install(work_dir, version="3.0.0", repo="acme/gd",
+                              mock_bin=mock_curl, use_env_vars=True)
+        assert result.returncode == 0
+        assert "v3.0.0" in result.stdout
+
+    def test_vendor_install_dir(self, work_dir, mock_curl):
+        custom_dir = ".vendored/pkg/git-dogfood"
+        result = _run_install(work_dir, mock_bin=mock_curl,
+                              env_extra={"VENDOR_INSTALL_DIR": custom_dir})
+        assert result.returncode == 0
+        assert (work_dir / custom_dir / "resolve").exists()
+
+    def test_install_dir_defaults_to_dogfood(self, work_dir, mock_curl):
+        result = _run_install(work_dir, mock_bin=mock_curl)
+        assert result.returncode == 0
+        assert (work_dir / ".dogfood" / "resolve").exists()
+
+    def test_env_vars_override_positional_args(self, work_dir, mock_curl):
+        """VENDOR_REF/VENDOR_REPO take precedence over $1/$2."""
+        result = _run_install(work_dir, mock_bin=mock_curl,
+                              positional_args=["1.0.0", "old/repo"],
+                              env_extra={"VENDOR_REF": "5.0.0",
+                                         "VENDOR_REPO": "new/repo"})
+        assert result.returncode == 0
+        assert "v5.0.0" in result.stdout
+        assert "new/repo" in result.stdout
+
+
+# ── Tests: V1 artifacts removed ──────────────────────────────────────────
+
+class TestV1ArtifactsRemoved:
+    def test_no_version_file_written(self, work_dir, mock_curl):
+        """V2 framework handles version tracking — install.sh must not write .version."""
         _run_install(work_dir, version="2.3.4", mock_bin=mock_curl)
-        version_file = work_dir / ".dogfood" / ".version"
-        assert version_file.exists()
-        assert version_file.read_text().strip() == "2.3.4"
+        assert not (work_dir / ".dogfood" / ".version").exists()
 
-    def test_version_file_overwritten_on_update(self, work_dir, mock_curl):
-        _run_install(work_dir, version="1.0.0", mock_bin=mock_curl)
-        _run_install(work_dir, version="2.0.0", mock_bin=mock_curl)
-        assert (work_dir / ".dogfood" / ".version").read_text().strip() == "2.0.0"
+    def test_vendor_config_not_modified(self, work_dir, mock_curl):
+        """V2 framework handles registration — install.sh must not touch config.json."""
+        import json
+        (work_dir / ".vendored").mkdir()
+        original = {"vendors": {"other-tool": {"repo": "o/ot"}}}
+        (work_dir / ".vendored" / "config.json").write_text(
+            json.dumps(original, indent=2) + "\n"
+        )
+        _run_install(work_dir, mock_bin=mock_curl)
+        config = json.loads((work_dir / ".vendored" / "config.json").read_text())
+        assert config == original
 
 
 # ── Tests: fetch_file fallback ─────────────────────────────────────────────
@@ -155,45 +215,56 @@ class TestWorkflowInstall:
         assert "already exists, skipping" in result.stdout
 
 
-# ── Tests: Vendor config registration ─────────────────────────────────────
+# ── Tests: Manifest emission ─────────────────────────────────────────────
 
-class TestVendorRegistration:
-    def test_registers_in_vendor_config(self, work_dir, mock_curl):
-        # Create prerequisite .vendored/config.json
-        (work_dir / ".vendored").mkdir()
-        (work_dir / ".vendored" / "config.json").write_text(
-            json.dumps({"vendors": {}}, indent=2) + "\n"
-        )
-
-        result = _run_install(work_dir, repo="mangimangi/git-dogfood", mock_bin=mock_curl)
+class TestManifest:
+    def test_manifest_written_when_env_set(self, work_dir, mock_curl):
+        manifest = work_dir / "manifest.txt"
+        result = _run_install(work_dir, mock_bin=mock_curl,
+                              env_extra={"VENDOR_MANIFEST": str(manifest)})
         assert result.returncode == 0
+        assert manifest.exists()
+        lines = manifest.read_text().strip().splitlines()
+        assert ".dogfood/resolve" in lines
 
-        config = json.loads((work_dir / ".vendored" / "config.json").read_text())
-        assert "git-dogfood" in config["vendors"]
-        vendor = config["vendors"]["git-dogfood"]
-        assert vendor["repo"] == "mangimangi/git-dogfood"
-        assert vendor["install_branch"] == "chore/install-git-dogfood"
-        assert ".dogfood/**" in vendor["protected"]
+    def test_manifest_includes_workflow_on_first_install(self, work_dir, mock_curl):
+        manifest = work_dir / "manifest.txt"
+        result = _run_install(work_dir, mock_bin=mock_curl,
+                              env_extra={"VENDOR_MANIFEST": str(manifest)})
+        assert result.returncode == 0
+        lines = manifest.read_text().strip().splitlines()
+        assert ".dogfood/resolve" in lines
+        assert ".github/workflows/dogfood.yml" in lines
 
-    def test_preserves_existing_vendors(self, work_dir, mock_curl):
-        (work_dir / ".vendored").mkdir()
-        (work_dir / ".vendored" / "config.json").write_text(
-            json.dumps({
-                "vendors": {"other-tool": {"repo": "o/ot"}}
-            }, indent=2) + "\n"
-        )
+    def test_manifest_excludes_workflow_when_exists(self, work_dir, mock_curl):
+        # Pre-create the workflow
+        (work_dir / ".github" / "workflows").mkdir(parents=True)
+        (work_dir / ".github" / "workflows" / "dogfood.yml").write_text("# existing\n")
 
-        _run_install(work_dir, mock_bin=mock_curl)
+        manifest = work_dir / "manifest.txt"
+        result = _run_install(work_dir, mock_bin=mock_curl,
+                              env_extra={"VENDOR_MANIFEST": str(manifest)})
+        assert result.returncode == 0
+        lines = manifest.read_text().strip().splitlines()
+        assert ".dogfood/resolve" in lines
+        assert ".github/workflows/dogfood.yml" not in lines
 
-        config = json.loads((work_dir / ".vendored" / "config.json").read_text())
-        assert "other-tool" in config["vendors"]
-        assert "git-dogfood" in config["vendors"]
-
-    def test_no_registration_without_config(self, work_dir, mock_curl):
-        """If .vendored/config.json doesn't exist, skip registration."""
+    def test_no_manifest_when_env_unset(self, work_dir, mock_curl):
         result = _run_install(work_dir, mock_bin=mock_curl)
         assert result.returncode == 0
-        assert not (work_dir / ".vendored" / "config.json").exists()
+        # No manifest file should be created anywhere in work_dir
+        manifests = list(work_dir.glob("manifest*"))
+        assert len(manifests) == 0
+
+    def test_manifest_uses_custom_install_dir(self, work_dir, mock_curl):
+        manifest = work_dir / "manifest.txt"
+        custom_dir = ".vendored/pkg/git-dogfood"
+        result = _run_install(work_dir, mock_bin=mock_curl,
+                              env_extra={"VENDOR_MANIFEST": str(manifest),
+                                         "VENDOR_INSTALL_DIR": custom_dir})
+        assert result.returncode == 0
+        lines = manifest.read_text().strip().splitlines()
+        assert f"{custom_dir}/resolve" in lines
 
 
 # ── Tests: Missing prerequisites ──────────────────────────────────────────
