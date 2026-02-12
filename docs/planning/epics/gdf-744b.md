@@ -1,4 +1,4 @@
-# Git-dogfood: Vendor V2 Compliance
+# Epic gdf-744b: Vendor V2 compliance for install.sh
 
 Changes needed to make git-dogfood compliant with the git-vendored v2 contract.
 
