@@ -208,13 +208,42 @@ echo "Done! git-dogfood v$VERSION installed."
 | Old framework | Env vars unset → falls back to `.dogfood/`, no manifest written |
 | Dogfood (self-install) | `VENDOR_INSTALL_DIR` not set → falls back to `.dogfood/` |
 
+## Issues
+
+### gdf-744b.1 — Migrate install.sh to V2 env var and install dir contract
+
+Accept `VENDOR_REF`, `VENDOR_REPO`, `VENDOR_INSTALL_DIR` env vars with positional/default
+fallbacks. Update file placement (`mkdir`, `fetch_file`, `chmod`) to use `$INSTALL_DIR`.
+Update header comment. Update and add tests.
+
+Covers: sections 1, 2, 3 above.
+
+### gdf-744b.2 — Remove V1-only artifacts from install.sh
+
+Remove `.dogfood/.version` write and `.vendored/config.json` self-registration block.
+Remove the `install_workflow` helper (inline the logic). Update tests.
+
+Covers: sections 4, 5 above.
+
+### gdf-744b.3 — Add V2 manifest emission to install.sh
+
+Track installed files in `INSTALLED_FILES` array and write to `$VENDOR_MANIFEST`
+when set. Add tests.
+
+Covers: section 6 above.
+
+### Dependencies
+
+```
+gdf-744b.1 ──┬──> gdf-744b.2
+              └──> gdf-744b.3
+```
+
+Issue 1 restructures paths and inputs; issues 2 and 3 are independent of each other.
+
 ## Checklist
 
-- [ ] `install.sh`: Use `VENDOR_REF`/`VENDOR_REPO` with positional fallback
-- [ ] `install.sh`: Use `VENDOR_INSTALL_DIR` with `.dogfood/` fallback
-- [ ] `install.sh`: Track all files in `INSTALLED_FILES` array
-- [ ] `install.sh`: Write `$VENDOR_MANIFEST` when set
-- [ ] `install.sh`: Remove `.dogfood/.version` write
-- [ ] `install.sh`: Remove `.vendored/config.json` self-registration block
-- [ ] Tests: Update for new file paths and env var contract
+- [ ] `gdf-744b.1`: V2 env vars + install dir + file placement + tests
+- [ ] `gdf-744b.2`: Remove version file + self-registration + tests
+- [ ] `gdf-744b.3`: Manifest emission + tests
 - [ ] Release: Tag new version
