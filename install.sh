@@ -14,6 +14,7 @@
 set -euo pipefail
 
 VERSION="${VENDOR_REF:-${1:?Usage: install.sh <version> [<repo>]}}"
+VERSION="${VERSION#v}"  # strip v prefix if present (VENDOR_REF includes it)
 DOGFOOD_REPO="${VENDOR_REPO:-${2:-mangimangi/git-dogfood}}"
 INSTALL_DIR="${VENDOR_INSTALL_DIR:-.dogfood}"
 INSTALLED_FILES=()
