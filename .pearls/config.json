@@ -1,8 +1,0 @@
-{
-  "prefix": "gdf",
-  "description": "git-dogfood: automated install-on-release to self-instlal repo-embedded software via GitHub workflows",
-  "docs": ["AGENTS.md", ".pearls/AGENTS.md", "README.md", "docs/"],
-  "models": {
-    "implementer": "claude-opus-4-6"
-  }
-}
