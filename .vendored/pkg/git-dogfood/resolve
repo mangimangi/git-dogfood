@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Dogfood resolver — finds the git-dogfood vendor by key convention.
 
-Reads .vendored/config.json and outputs the vendor name if a
+Scans .vendored/configs/ for per-vendor JSON files first, falling back
+to monolithic .vendored/config.json.  Outputs the vendor name if a
 "git-dogfood" key exists, in GITHUB_OUTPUT format (vendor=<name>).
 
 Usage:
@@ -15,9 +16,44 @@ import json
 import os
 import sys
 
+CONFIGS_DIR = ".vendored/configs"
+CONFIG_PATH = ".vendored/config.json"
 
-def load_vendor_config(config_path=".vendored/config.json"):
-    """Load the vendored config."""
+
+def _extract_vendor_registry(raw):
+    """Extract registry fields from a per-vendor config file.
+
+    If the file has a _vendor key, use that.  Otherwise treat all
+    top-level keys as registry fields (backwards compat).
+    """
+    if "_vendor" in raw:
+        return dict(raw["_vendor"])
+    return dict(raw)
+
+
+def load_vendor_config(config_path=CONFIG_PATH):
+    """Load the vendored config.
+
+    Scans .vendored/configs/ for per-vendor <vendor>.json files first.
+    Falls back to monolithic config.json if configs/ dir doesn't exist
+    or has no .json files.
+
+    Return format: {"vendors": {"name": {...}, ...}}
+    """
+    # Try per-vendor configs first
+    if os.path.isdir(CONFIGS_DIR):
+        json_files = [f for f in os.listdir(CONFIGS_DIR) if f.endswith(".json")]
+        if json_files:
+            vendors = {}
+            for filename in sorted(json_files):
+                vendor_name = filename[:-5]  # strip .json
+                filepath = os.path.join(CONFIGS_DIR, filename)
+                with open(filepath) as f:
+                    raw = json.load(f)
+                vendors[vendor_name] = _extract_vendor_registry(raw)
+            return {"vendors": vendors}
+
+    # Fallback to monolithic config.json
     if not os.path.isfile(config_path):
         return None
     with open(config_path) as f:
