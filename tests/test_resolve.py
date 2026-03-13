@@ -37,11 +37,37 @@ def tmp_repo(tmp_path, monkeypatch):
 
 @pytest.fixture
 def make_config(tmp_repo):
+    """Write a monolithic .vendored/config.json."""
     def _make(config_dict):
         path = tmp_repo / ".vendored" / "config.json"
         path.write_text(json.dumps(config_dict, indent=2) + "\n")
         return str(path)
     return _make
+
+
+@pytest.fixture
+def make_per_vendor_configs(tmp_repo):
+    """Write per-vendor config files to .vendored/configs/."""
+    def _make(vendors_dict):
+        configs_dir = tmp_repo / ".vendored" / "configs"
+        configs_dir.mkdir(exist_ok=True)
+        for name, cfg in vendors_dict.items():
+            path = configs_dir / f"{name}.json"
+            path.write_text(json.dumps(cfg, indent=2) + "\n")
+        return str(configs_dir)
+    return _make
+
+
+# ── Tests: _extract_vendor_registry ──────────────────────────────────────
+
+class TestExtractVendorRegistry:
+    def test_extracts_vendor_key(self):
+        raw = {"_vendor": {"repo": "o/gd", "protected": [".dogfood/**"]}, "extra": "ignored"}
+        assert resolve._extract_vendor_registry(raw) == {"repo": "o/gd", "protected": [".dogfood/**"]}
+
+    def test_uses_all_keys_when_no_vendor(self):
+        raw = {"repo": "o/gd", "protected": [".dogfood/**"]}
+        assert resolve._extract_vendor_registry(raw) == raw
 
 
 # ── Tests: find_dogfood_vendor ─────────────────────────────────────────────
@@ -81,9 +107,57 @@ class TestFindDogfoodVendor:
         assert resolve.find_dogfood_vendor({}) is None
 
 
-# ── Tests: load_vendor_config ──────────────────────────────────────────────
+# ── Tests: load_vendor_config (per-vendor configs) ───────────────────────
 
-class TestLoadVendorConfig:
+class TestLoadVendorConfigPerVendor:
+    def test_loads_per_vendor_configs(self, make_per_vendor_configs):
+        make_per_vendor_configs({
+            "git-dogfood": {"_vendor": {"repo": "o/gd"}},
+            "git-semver": {"_vendor": {"repo": "o/gs"}},
+        })
+        config = resolve.load_vendor_config()
+        assert "vendors" in config
+        assert "git-dogfood" in config["vendors"]
+        assert config["vendors"]["git-dogfood"]["repo"] == "o/gd"
+        assert "git-semver" in config["vendors"]
+
+    def test_extracts_vendor_key_from_per_vendor(self, make_per_vendor_configs):
+        make_per_vendor_configs({
+            "git-dogfood": {
+                "_vendor": {"repo": "o/gd", "protected": [".dogfood/**"]},
+                "prefix": "gdf",
+            },
+        })
+        config = resolve.load_vendor_config()
+        # _vendor fields extracted, top-level fields like prefix not included
+        assert config["vendors"]["git-dogfood"]["repo"] == "o/gd"
+        assert "prefix" not in config["vendors"]["git-dogfood"]
+
+    def test_per_vendor_takes_precedence_over_monolithic(self, tmp_repo, make_config, make_per_vendor_configs):
+        make_config({"vendors": {"old-vendor": {"repo": "o/old"}}})
+        make_per_vendor_configs({"git-dogfood": {"_vendor": {"repo": "o/gd"}}})
+        config = resolve.load_vendor_config()
+        assert "git-dogfood" in config["vendors"]
+        assert "old-vendor" not in config["vendors"]
+
+    def test_ignores_non_json_files(self, tmp_repo):
+        configs_dir = tmp_repo / ".vendored" / "configs"
+        configs_dir.mkdir()
+        (configs_dir / "README.md").write_text("not json")
+        (configs_dir / "git-dogfood.json").write_text(json.dumps({"_vendor": {"repo": "o/gd"}}))
+        config = resolve.load_vendor_config()
+        assert "git-dogfood" in config["vendors"]
+
+    def test_empty_configs_dir_falls_back(self, tmp_repo, make_config):
+        (tmp_repo / ".vendored" / "configs").mkdir()
+        make_config({"vendors": {"git-dogfood": {"repo": "o/gd"}}})
+        config = resolve.load_vendor_config()
+        assert "git-dogfood" in config["vendors"]
+
+
+# ── Tests: load_vendor_config (monolithic fallback) ──────────────────────
+
+class TestLoadVendorConfigMonolithic:
     def test_loads_config(self, make_config):
         make_config({"vendors": {"x": {"repo": "o/x"}}})
         config = resolve.load_vendor_config()
@@ -96,8 +170,17 @@ class TestLoadVendorConfig:
 # ── Tests: main ────────────────────────────────────────────────────────────
 
 class TestMain:
-    def test_outputs_vendor(self, make_config, capsys):
+    def test_outputs_vendor_from_monolithic(self, make_config, capsys):
         make_config({"vendors": {"git-dogfood": {"repo": "o/gd"}}})
+        resolve.main()
+        out = capsys.readouterr().out
+        assert "vendor=git-dogfood" in out
+
+    def test_outputs_vendor_from_per_vendor_configs(self, make_per_vendor_configs, capsys):
+        make_per_vendor_configs({
+            "git-dogfood": {"_vendor": {"repo": "o/gd"}},
+            "pearls": {"_vendor": {"repo": "o/p"}},
+        })
         resolve.main()
         out = capsys.readouterr().out
         assert "vendor=git-dogfood" in out

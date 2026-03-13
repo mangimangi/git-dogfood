@@ -12,7 +12,7 @@ merge → Bump & Release → dogfood.yml → install-vendored → PR
 
 1. A code change merges to `main`, triggering **Bump & Release** (via git-semver)
 2. Bump & Release completes successfully
-3. This triggers **dogfood.yml**, which runs `.dogfood/resolve` to find the `git-dogfood` vendor key in `.vendored/config.json`
+3. This triggers **dogfood.yml**, which runs `.dogfood/resolve` to find the `git-dogfood` vendor key in `.vendored/configs/` (with fallback to `.vendored/config.json`)
 4. dogfood.yml calls **install-vendored.yml** with the resolved vendor
 5. install-vendored downloads the new version and opens a **PR**
 6. The PR merges (manually or via automerge)
@@ -23,7 +23,7 @@ The version-bump workflow skips commits whose message starts with `chore: bump v
 
 ## Prerequisites
 
-- [git-vendored](https://github.com/mangimangi/git-vendored) — provides `.vendored/config.json` and the `install-vendored.yml` workflow
+- [git-vendored](https://github.com/mangimangi/git-vendored) — provides `.vendored/configs/` (or `.vendored/config.json`) and the `install-vendored.yml` workflow
 - [git-semver](https://github.com/mangimangi/git-semver) — provides the `Bump & Release` workflow
 
 ## Installation
@@ -38,23 +38,19 @@ This creates:
 - `.dogfood/.version` — installed version
 - `.github/workflows/dogfood.yml` — the self-update workflow (first install only, not overwritten on update)
 
-And registers `git-dogfood` in `.vendored/config.json` (if present).
-
 ## Configuration
 
-git-dogfood uses the vendor key convention — `.dogfood/resolve` looks for a `"git-dogfood"` key in `.vendored/config.json`. No extra flags needed.
+`.dogfood/resolve` looks for a `"git-dogfood"` vendor entry. It scans `.vendored/configs/*.json` (per-vendor config files) first, falling back to the monolithic `.vendored/config.json` for backwards compatibility.
 
-Relevant fields in `.vendored/config.json`:
+Per-vendor config (`.vendored/configs/git-dogfood.json`):
 
 ```json
 {
-  "vendors": {
-    "git-dogfood": {
-      "repo": "mangimangi/git-dogfood",
-      "install_branch": "chore/install-git-dogfood",
-      "protected": [".dogfood/**", ".github/workflows/dogfood.yml"],
-      "allowed": [".dogfood/.version"]
-    }
+  "_vendor": {
+    "repo": "mangimangi/git-dogfood",
+    "install_branch": "chore/install-git-dogfood",
+    "protected": [".dogfood/**", ".github/workflows/dogfood.yml"],
+    "allowed": [".dogfood/.version"]
   }
 }
 ```
