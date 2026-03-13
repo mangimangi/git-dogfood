@@ -18,6 +18,7 @@ def _import_resolve():
     loader = importlib.machinery.SourceFileLoader("dogfood_resolve", filepath)
     spec = importlib.util.spec_from_loader("dogfood_resolve", loader, origin=filepath)
     module = importlib.util.module_from_spec(spec)
+    module.__file__ = filepath
     sys.modules["dogfood_resolve"] = module
     spec.loader.exec_module(module)
     return module
@@ -73,38 +74,38 @@ class TestExtractVendorRegistry:
 # ── Tests: find_dogfood_vendor ─────────────────────────────────────────────
 
 class TestFindDogfoodVendor:
-    def test_finds_dogfood_vendor(self):
+    def test_finds_vendor_by_repo(self):
         config = {
             "vendors": {
-                "git-dogfood": {"repo": "o/gd"},
+                "git-dogfood": {"repo": "mangimangi/git-dogfood"},
             }
         }
-        assert resolve.find_dogfood_vendor(config) == "git-dogfood"
+        assert resolve.find_dogfood_vendor(config, "mangimangi/git-dogfood") == "git-dogfood"
 
-    def test_returns_none_when_no_dogfood(self):
+    def test_finds_pearls_in_pearls_repo(self):
         config = {
             "vendors": {
-                "git-vendored": {"repo": "o/gv"},
-                "pearls": {"repo": "o/p"},
+                "git-vendored": {"repo": "mangimangi/git-vendored"},
+                "git-dogfood": {"repo": "mangimangi/git-dogfood"},
+                "pearls": {"repo": "mangimangi/pearls"},
             }
         }
-        assert resolve.find_dogfood_vendor(config) is None
+        assert resolve.find_dogfood_vendor(config, "mangimangi/pearls") == "pearls"
 
-    def test_finds_by_key_ignoring_other_vendors(self):
+    def test_returns_none_when_no_match(self):
         config = {
             "vendors": {
-                "git-vendored": {"repo": "o/gv"},
-                "git-dogfood": {"repo": "o/gd"},
-                "pearls": {"repo": "o/p"},
+                "git-vendored": {"repo": "mangimangi/git-vendored"},
+                "pearls": {"repo": "mangimangi/pearls"},
             }
         }
-        assert resolve.find_dogfood_vendor(config) == "git-dogfood"
+        assert resolve.find_dogfood_vendor(config, "mangimangi/other-tool") is None
 
     def test_empty_vendors(self):
-        assert resolve.find_dogfood_vendor({"vendors": {}}) is None
+        assert resolve.find_dogfood_vendor({"vendors": {}}, "mangimangi/foo") is None
 
     def test_no_vendors_key(self):
-        assert resolve.find_dogfood_vendor({}) is None
+        assert resolve.find_dogfood_vendor({}, "mangimangi/foo") is None
 
 
 # ── Tests: load_vendor_config (per-vendor configs) ───────────────────────
@@ -129,7 +130,6 @@ class TestLoadVendorConfigPerVendor:
             },
         })
         config = resolve.load_vendor_config()
-        # _vendor fields extracted, top-level fields like prefix not included
         assert config["vendors"]["git-dogfood"]["repo"] == "o/gd"
         assert "prefix" not in config["vendors"]["git-dogfood"]
 
@@ -170,29 +170,50 @@ class TestLoadVendorConfigMonolithic:
 # ── Tests: main ────────────────────────────────────────────────────────────
 
 class TestMain:
-    def test_outputs_vendor_from_monolithic(self, make_config, capsys):
-        make_config({"vendors": {"git-dogfood": {"repo": "o/gd"}}})
-        resolve.main()
-        out = capsys.readouterr().out
-        assert "vendor=git-dogfood" in out
-
-    def test_outputs_vendor_from_per_vendor_configs(self, make_per_vendor_configs, capsys):
+    def test_outputs_vendor_matching_repo(self, make_per_vendor_configs, monkeypatch, capsys):
         make_per_vendor_configs({
-            "git-dogfood": {"_vendor": {"repo": "o/gd"}},
-            "pearls": {"_vendor": {"repo": "o/p"}},
+            "git-dogfood": {"_vendor": {"repo": "mangimangi/git-dogfood"}},
+            "pearls": {"_vendor": {"repo": "mangimangi/pearls"}},
         })
+        monkeypatch.setenv("GITHUB_REPOSITORY", "mangimangi/git-dogfood")
         resolve.main()
         out = capsys.readouterr().out
         assert "vendor=git-dogfood" in out
 
-    def test_no_dogfood_no_output(self, make_config, capsys):
+    def test_outputs_pearls_in_pearls_repo(self, make_per_vendor_configs, monkeypatch, capsys):
+        make_per_vendor_configs({
+            "git-dogfood": {"_vendor": {"repo": "mangimangi/git-dogfood"}},
+            "pearls": {"_vendor": {"repo": "mangimangi/pearls"}},
+        })
+        monkeypatch.setenv("GITHUB_REPOSITORY", "mangimangi/pearls")
+        resolve.main()
+        out = capsys.readouterr().out
+        assert "vendor=pearls" in out
+
+    def test_no_match_no_output(self, make_config, monkeypatch, capsys):
+        make_config({"vendors": {"pearls": {"repo": "mangimangi/pearls"}}})
+        monkeypatch.setenv("GITHUB_REPOSITORY", "mangimangi/other")
+        resolve.main()
+        out = capsys.readouterr().out
+        assert "vendor=" not in out
+
+    def test_no_github_repository(self, make_config, monkeypatch, capsys):
         make_config({"vendors": {"pearls": {"repo": "o/p"}}})
+        monkeypatch.delenv("GITHUB_REPOSITORY", raising=False)
         resolve.main()
         out = capsys.readouterr().out
         assert "vendor=" not in out
 
     def test_no_config_no_crash(self, tmp_path, monkeypatch, capsys):
         monkeypatch.chdir(tmp_path)
+        monkeypatch.setenv("GITHUB_REPOSITORY", "mangimangi/foo")
         resolve.main()
         out = capsys.readouterr().out
         assert "vendor=" not in out
+
+    def test_monolithic_config(self, make_config, monkeypatch, capsys):
+        make_config({"vendors": {"git-dogfood": {"repo": "mangimangi/git-dogfood"}}})
+        monkeypatch.setenv("GITHUB_REPOSITORY", "mangimangi/git-dogfood")
+        resolve.main()
+        out = capsys.readouterr().out
+        assert "vendor=git-dogfood" in out

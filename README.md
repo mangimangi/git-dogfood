@@ -12,7 +12,7 @@ merge → Bump & Release → dogfood.yml → install-vendored → PR
 
 1. A code change merges to `main`, triggering **Bump & Release** (via git-semver)
 2. Bump & Release completes successfully
-3. This triggers **dogfood.yml**, which runs `.dogfood/resolve` to find the `git-dogfood` vendor key in `.vendored/configs/` (with fallback to `.vendored/config.json`)
+3. This triggers **dogfood.yml**, which runs the resolve script to find the vendor whose `repo` matches `GITHUB_REPOSITORY`
 4. dogfood.yml calls **install-vendored.yml** with the resolved vendor
 5. install-vendored downloads the new version and opens a **PR**
 6. The PR merges (manually or via automerge)
@@ -40,7 +40,7 @@ This creates:
 
 ## Configuration
 
-`.dogfood/resolve` looks for a `"git-dogfood"` vendor entry. It scans `.vendored/configs/*.json` (per-vendor config files) first, falling back to the monolithic `.vendored/config.json` for backwards compatibility.
+The resolve script matches `GITHUB_REPOSITORY` against each vendor's `repo` field to find the self-referencing vendor entry. It scans `.vendored/configs/*.json` (per-vendor config files) first, falling back to the monolithic `.vendored/config.json` for backwards compatibility.
 
 Per-vendor config (`.vendored/configs/git-dogfood.json`):
 
