@@ -16,8 +16,7 @@
   "prefix": "gdf",
   "description": "git-dogfood: automated install-on-release to self-instlal repo-embedded software via GitHub workflows",
   "docs": [
-    "AGENTS.md",
-    ".pearls/AGENTS.md",
+    ".vendored/pkg/pearls/AGENTS.md",
     "README.md",
     "docs/"
   ],
