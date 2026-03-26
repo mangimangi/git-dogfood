@@ -267,6 +267,78 @@ class TestManifest:
         assert f"{custom_dir}/resolve" in lines
 
 
+# ── Tests: Vendor self-registration ───────────────────────────────────────
+
+class TestVendorSelfRegistration:
+    def test_creates_vendor_config_on_first_install(self, work_dir, mock_curl):
+        _run_install(work_dir, repo="acme/gd", mock_bin=mock_curl)
+        config_path = work_dir / ".vendored" / "configs" / "git-dogfood.json"
+        assert config_path.exists()
+
+    def test_vendor_config_contains_repo(self, work_dir, mock_curl):
+        import json
+        _run_install(work_dir, repo="acme/gd", mock_bin=mock_curl)
+        config = json.loads(
+            (work_dir / ".vendored" / "configs" / "git-dogfood.json").read_text()
+        )
+        assert config["_vendor"]["repo"] == "acme/gd"
+
+    def test_vendor_config_contains_install_branch(self, work_dir, mock_curl):
+        import json
+        _run_install(work_dir, mock_bin=mock_curl)
+        config = json.loads(
+            (work_dir / ".vendored" / "configs" / "git-dogfood.json").read_text()
+        )
+        assert config["_vendor"]["install_branch"] == "chore/install-git-dogfood"
+
+    def test_vendor_config_protected_uses_install_dir(self, work_dir, mock_curl):
+        import json
+        custom_dir = ".vendored/pkg/git-dogfood"
+        _run_install(work_dir, mock_bin=mock_curl,
+                     env_extra={"VENDOR_INSTALL_DIR": custom_dir})
+        config = json.loads(
+            (work_dir / ".vendored" / "configs" / "git-dogfood.json").read_text()
+        )
+        assert f"{custom_dir}/**" in config["_vendor"]["protected"]
+        assert ".github/workflows/dogfood.yml" in config["_vendor"]["protected"]
+
+    def test_skips_config_if_exists(self, work_dir, mock_curl):
+        (work_dir / ".vendored" / "configs").mkdir(parents=True)
+        existing = '{"_vendor": {"repo": "original/repo"}}\n'
+        (work_dir / ".vendored" / "configs" / "git-dogfood.json").write_text(existing)
+
+        _run_install(work_dir, repo="new/repo", mock_bin=mock_curl)
+        content = (work_dir / ".vendored" / "configs" / "git-dogfood.json").read_text()
+        assert content == existing
+
+    def test_vendor_config_in_manifest(self, work_dir, mock_curl):
+        manifest = work_dir / "manifest.txt"
+        _run_install(work_dir, mock_bin=mock_curl,
+                     env_extra={"VENDOR_MANIFEST": str(manifest)})
+        lines = manifest.read_text().strip().splitlines()
+        assert ".vendored/configs/git-dogfood.json" in lines
+
+    def test_vendor_config_not_in_manifest_when_exists(self, work_dir, mock_curl):
+        (work_dir / ".vendored" / "configs").mkdir(parents=True)
+        (work_dir / ".vendored" / "configs" / "git-dogfood.json").write_text("{}\n")
+
+        manifest = work_dir / "manifest.txt"
+        _run_install(work_dir, mock_bin=mock_curl,
+                     env_extra={"VENDOR_MANIFEST": str(manifest)})
+        lines = manifest.read_text().strip().splitlines()
+        assert ".vendored/configs/git-dogfood.json" not in lines
+
+    def test_uses_dogfood_repo_for_forks(self, work_dir, mock_curl):
+        """Vendor config repo field should use $DOGFOOD_REPO, not hardcoded."""
+        import json
+        _run_install(work_dir, repo="myfork/git-dogfood", mock_bin=mock_curl,
+                     use_env_vars=True, version="1.0.0")
+        config = json.loads(
+            (work_dir / ".vendored" / "configs" / "git-dogfood.json").read_text()
+        )
+        assert config["_vendor"]["repo"] == "myfork/git-dogfood"
+
+
 # ── Tests: Missing prerequisites ──────────────────────────────────────────
 
 class TestPrerequisites:

@@ -55,6 +55,26 @@ else
     echo "Workflow .github/workflows/dogfood.yml already exists, skipping"
 fi
 
+# Self-register vendor config (first install only)
+VENDOR_CONFIG=".vendored/configs/git-dogfood.json"
+if [ ! -f "$VENDOR_CONFIG" ]; then
+    mkdir -p .vendored/configs
+    cat > "$VENDOR_CONFIG" << CONF
+{
+  "_vendor": {
+    "repo": "$DOGFOOD_REPO",
+    "install_branch": "chore/install-git-dogfood",
+    "protected": [
+      "$INSTALL_DIR/**",
+      ".github/workflows/dogfood.yml"
+    ]
+  }
+}
+CONF
+    echo "Registered vendor config $VENDOR_CONFIG"
+    INSTALLED_FILES+=("$VENDOR_CONFIG")
+fi
+
 # Write manifest
 if [ -n "${VENDOR_MANIFEST:-}" ]; then
     printf '%s\n' "${INSTALLED_FILES[@]}" > "$VENDOR_MANIFEST"
