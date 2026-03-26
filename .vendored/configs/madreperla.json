@@ -8,8 +8,12 @@
     ]
   },
   "provider": "pearls",
-  "description": "",
-  "docs": [],
+  "description": "git-dogfood: automated install-on-release to self-instlal repo-embedded software via GitHub workflows",
+  "docs": [
+    ".vendored/pkg/pearls/AGENTS.md",
+    "README.md",
+    "docs/"
+  ],
   "providers": {
     "issues": {
       "name": "pearls",
