@@ -232,18 +232,50 @@ when set. Add tests.
 
 Covers: section 6 above.
 
+### gdf-744b.4 — Consumer self-registration for dogfood loop
+
+Create `.vendored/configs/<repo-name>.json` on first install so the dogfood resolve
+convention works in fresh consumer repos. The config is self-referencing: filename and
+`_vendor.repo` both match the consumer's `GITHUB_REPOSITORY`.
+
+Config contents (defaults, consumer can overwrite):
+
+```json
+{
+  "_vendor": {
+    "repo": "<GITHUB_REPOSITORY>",
+    "install_branch": "chore/install-<repo-name>",
+    "protected": [
+      "<INSTALL_DIR>/**",
+      ".github/workflows/dogfood.yml"
+    ]
+  }
+}
+```
+
+Guards:
+- Skip if `GITHUB_REPOSITORY` not set (local runs still install files, just no dogfood loop)
+- Skip if config already exists (first-install only)
+- Add config to `INSTALLED_FILES` for manifest tracking
+
+Covers: `docs/planning/vendor-self-registration.md`
+
+Depends on: resolve convention (vendor name = repo name) — already landed.
+
 ### Dependencies
 
 ```
 gdf-744b.1 ──┬──> gdf-744b.2
-              └──> gdf-744b.3
+              ├──> gdf-744b.3
+              └──> gdf-744b.4
 ```
 
-Issue 1 restructures paths and inputs; issues 2 and 3 are independent of each other.
+Issue 1 restructures paths and inputs; issues 2, 3, and 4 are independent of each other.
 
 ## Checklist
 
-- [ ] `gdf-744b.1`: V2 env vars + install dir + file placement + tests
-- [ ] `gdf-744b.2`: Remove version file + self-registration + tests
-- [ ] `gdf-744b.3`: Manifest emission + tests
+- [x] `gdf-744b.1`: V2 env vars + install dir + file placement + tests
+- [x] `gdf-744b.2`: Remove version file + self-registration + tests
+- [x] `gdf-744b.3`: Manifest emission + tests
+- [ ] `gdf-744b.4`: Consumer self-registration for dogfood loop + tests
 - [ ] Release: Tag new version

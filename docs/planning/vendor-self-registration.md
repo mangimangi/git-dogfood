@@ -2,34 +2,63 @@
 
 ## Problem
 
-When `install.sh` runs in a new repo, it does not create a `.vendored/configs/git-dogfood.json` config file with `_vendor` metadata (`repo`, `install_branch`, `protected`). The git-vendored framework expects vendors to self-register these fields.
+When `install.sh` runs in a new consumer repo, the dogfood loop is broken:
 
-This only surfaces when adding git-dogfood to a **new** repo — existing repos already have the `_vendor` block from prior installs. Discovered during madreperla extraction (bootstrapping a fresh repo).
+1. Bump & Release tags a new version
+2. `dogfood.yml` triggers
+3. `resolve` derives vendor name from `GITHUB_REPOSITORY` (e.g. `acme/my-tool` → `my-tool`)
+4. `resolve` checks for `.vendored/configs/my-tool.json` — **file doesn't exist**
+5. Resolve outputs nothing, dogfood silently does nothing
+
+The resolve convention (vendor name = repo name, config filename must match) means the
+**consumer repo** needs a self-referencing config file. Nobody creates it today.
+
+Discovered during madreperla extraction (bootstrapping a fresh repo).
 
 ## What needs to change
 
-In `install.sh`, add a config creation block (similar to git-semver's pattern):
+In `install.sh`, after installing files, create `.vendored/configs/<repo-name>.json`
+if it doesn't exist. The repo name is derived from `GITHUB_REPOSITORY`.
 
 ```bash
-if [ ! -f .vendored/configs/git-dogfood.json ]; then
-    mkdir -p .vendored/configs
-    cat > .vendored/configs/git-dogfood.json << 'CONF'
+# Self-registration: ensure consumer has a vendor config for the dogfood loop.
+# The config filename must match the repo name (resolve convention).
+if [ -n "${GITHUB_REPOSITORY:-}" ]; then
+    CONSUMER_NAME="${GITHUB_REPOSITORY##*/}"
+    CONFIG_FILE=".vendored/configs/${CONSUMER_NAME}.json"
+    if [ ! -f "$CONFIG_FILE" ]; then
+        mkdir -p .vendored/configs
+        cat > "$CONFIG_FILE" << EOF
 {
   "_vendor": {
-    "repo": "mangimangi/git-dogfood",
-    "install_branch": "chore/install-git-dogfood",
+    "repo": "${GITHUB_REPOSITORY}",
+    "install_branch": "chore/install-${CONSUMER_NAME}",
     "protected": [
-      ".dogfood/**",
+      "${INSTALL_DIR}/**",
       ".github/workflows/dogfood.yml"
     ]
   }
 }
-CONF
+EOF
+        echo "Registered ${CONSUMER_NAME} in ${CONFIG_FILE}"
+        INSTALLED_FILES+=("$CONFIG_FILE")
+    fi
 fi
 ```
 
-The `_vendor.repo` field should use `$DOGFOOD_REPO` (or equivalent env var) so it works with forks.
+### Key design decisions
+
+- **Config named after consumer, not git-dogfood**: resolve derives vendor from
+  `GITHUB_REPOSITORY` and checks for `<repo-name>.json`. The config is self-referencing.
+- **`GITHUB_REPOSITORY` required**: Only runs in CI where this is set. Skip silently
+  otherwise (install still works, just no dogfood loop).
+- **First-install only**: `[ ! -f "$CONFIG_FILE" ]` guard. Consumer can overwrite
+  defaults after initial creation.
+- **`protected` uses `$INSTALL_DIR`**: Correct when framework sets `VENDOR_INSTALL_DIR`.
+- **Added to manifest**: Config file appended to `INSTALLED_FILES` so the framework
+  tracks it.
 
 ## Scope
 
-Small change — add config file creation to `install.sh`. No behavior change for existing consumers.
+Small change to `install.sh` + tests. No change to `resolve` (convention already landed).
+Filed as `gdf-744b.4`.
