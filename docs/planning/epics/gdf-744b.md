@@ -232,50 +232,34 @@ when set. Add tests.
 
 Covers: section 6 above.
 
-### gdf-744b.4 — Consumer self-registration for dogfood loop
+### gdf-744b.4 — Remove config existence gate from resolve
 
-Create `.vendored/configs/<repo-name>.json` on first install so the dogfood resolve
-convention works in fresh consumer repos. The config is self-referencing: filename and
-`_vendor.repo` both match the consumer's `GITHUB_REPOSITORY`.
+The resolve script gated on vendor config existence, which caused the dogfood loop
+to silently fail in fresh consumer repos (no config → no output → no install).
 
-Config contents (defaults, consumer can overwrite):
+The config gate was erroneous — the real gate is the workflow trigger (`dogfood.yml`
+only fires after Bump & Release). Resolve now unconditionally derives the vendor name
+from `GITHUB_REPOSITORY` and outputs it. If the consumer isn't set up for
+self-vendoring, `install-vendored` fails loudly downstream — which is correct.
 
-```json
-{
-  "_vendor": {
-    "repo": "<GITHUB_REPOSITORY>",
-    "install_branch": "chore/install-<repo-name>",
-    "protected": [
-      "<INSTALL_DIR>/**",
-      ".github/workflows/dogfood.yml"
-    ]
-  }
-}
-```
-
-Guards:
-- Skip if `GITHUB_REPOSITORY` not set (local runs still install files, just no dogfood loop)
-- Skip if config already exists (first-install only)
-- Add config to `INSTALLED_FILES` for manifest tracking
+No self-registration in `install.sh` needed. Consumer config is the consumer's concern.
 
 Covers: `docs/planning/vendor-self-registration.md`
-
-Depends on: resolve convention (vendor name = repo name) — already landed.
 
 ### Dependencies
 
 ```
 gdf-744b.1 ──┬──> gdf-744b.2
-              ├──> gdf-744b.3
-              └──> gdf-744b.4
+              └──> gdf-744b.3
 ```
 
-Issue 1 restructures paths and inputs; issues 2, 3, and 4 are independent of each other.
+Issue 1 restructures paths and inputs; issues 2 and 3 are independent of each other.
+Issue 4 is independent of all others.
 
 ## Checklist
 
 - [x] `gdf-744b.1`: V2 env vars + install dir + file placement + tests
 - [x] `gdf-744b.2`: Remove version file + self-registration + tests
 - [x] `gdf-744b.3`: Manifest emission + tests
-- [ ] `gdf-744b.4`: Consumer self-registration for dogfood loop + tests
+- [x] `gdf-744b.4`: Remove config existence gate from resolve + tests
 - [ ] Release: Tag new version

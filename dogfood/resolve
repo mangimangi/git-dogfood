@@ -4,22 +4,17 @@
 Convention: the vendor name is the repository name (the part after '/').
 For GITHUB_REPOSITORY=acme/my-tool, the vendor is "my-tool".
 
-Verifies the vendor config exists before outputting.  Outputs the vendor
-name in GITHUB_OUTPUT format (vendor=<name>).
+Outputs the vendor name in GITHUB_OUTPUT format (vendor=<name>).
 
 Usage:
     python3 .vendored/pkg/git-dogfood/resolve
 
 Exit codes:
-    0 - Always (outputs vendor=<name> if found, empty otherwise)
+    0 - Always (outputs vendor=<name> if set, empty otherwise)
 """
 
-import json
 import os
 import sys
-
-CONFIGS_DIR = ".vendored/configs"
-CONFIG_PATH = ".vendored/config.json"
 
 
 def vendor_from_repo(github_repo):
@@ -30,22 +25,6 @@ def vendor_from_repo(github_repo):
     return github_repo.split("/")[-1]
 
 
-def vendor_config_exists(vendor):
-    """Check if a vendor config exists in per-vendor or monolithic config."""
-    # Per-vendor config file
-    if os.path.isfile(os.path.join(CONFIGS_DIR, f"{vendor}.json")):
-        return True
-
-    # Monolithic fallback
-    if os.path.isfile(CONFIG_PATH):
-        with open(CONFIG_PATH) as f:
-            config = json.load(f)
-        if vendor in config.get("vendors", {}):
-            return True
-
-    return False
-
-
 def main():
     github_repo = os.environ.get("GITHUB_REPOSITORY", "")
     if not github_repo:
@@ -53,11 +32,7 @@ def main():
         return
 
     vendor = vendor_from_repo(github_repo)
-
-    if vendor_config_exists(vendor):
-        print(f"vendor={vendor}")
-    else:
-        print(f"No vendor config for {vendor}", file=sys.stderr)
+    print(f"vendor={vendor}")
 
 
 if __name__ == "__main__":
