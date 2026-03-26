@@ -1,4 +1,8 @@
-# Epic: Replace `dogfood: true` flag with convention-based resolve
+# Epic: Replace `dogfood: true` flag with convention-based resolve — DONE
+
+> Superseded by gdf-744b.4. Resolve now derives vendor name purely from
+> `GITHUB_REPOSITORY` with no config lookup at all — simpler than what
+> this epic proposed.
 
 ## Problem
 

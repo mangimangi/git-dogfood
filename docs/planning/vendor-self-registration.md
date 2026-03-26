@@ -1,35 +1,36 @@
-# install.sh `_vendor` self-registration
+# Vendor self-registration — resolved
 
-## Problem
+## Original problem
 
-When `install.sh` runs in a new repo, it does not create a `.vendored/configs/git-dogfood.json` config file with `_vendor` metadata (`repo`, `install_branch`, `protected`). The git-vendored framework expects vendors to self-register these fields.
+When `install.sh` runs in a new consumer repo, the dogfood loop was broken because
+`resolve` gated on the existence of a vendor config file. Fresh repos had no config,
+so resolve silently output nothing and the dogfood workflow did nothing.
 
-This only surfaces when adding git-dogfood to a **new** repo — existing repos already have the `_vendor` block from prior installs. Discovered during madreperla extraction (bootstrapping a fresh repo).
+## Resolution
 
-## What needs to change
+The config existence check was an erroneous gate. The real gate is the workflow
+trigger itself — `dogfood.yml` only fires after Bump & Release succeeds.
 
-In `install.sh`, add a config creation block (similar to git-semver's pattern):
+Resolve now unconditionally derives the vendor name from `GITHUB_REPOSITORY`
+(convention: `acme/my-tool` → `my-tool`) and outputs it. No config lookup needed.
 
-```bash
-if [ ! -f .vendored/configs/git-dogfood.json ]; then
-    mkdir -p .vendored/configs
-    cat > .vendored/configs/git-dogfood.json << 'CONF'
-{
-  "_vendor": {
-    "repo": "mangimangi/git-dogfood",
-    "install_branch": "chore/install-git-dogfood",
-    "protected": [
-      ".dogfood/**",
-      ".github/workflows/dogfood.yml"
-    ]
-  }
-}
-CONF
-fi
-```
+If the consumer doesn't have a vendor config or install.sh set up for self-vendoring,
+`install-vendored` (downstream) fails loudly — which is the correct behavior. Silent
+success with no action was the actual bug.
 
-The `_vendor.repo` field should use `$DOGFOOD_REPO` (or equivalent env var) so it works with forks.
+## What changed
 
-## Scope
+| File | Change |
+|------|--------|
+| `dogfood/resolve` | Removed `vendor_config_exists()` gate and config loading |
+| `tests/test_resolve.py` | Removed config-dependent tests, simplified to pure convention tests |
 
-Small change — add config file creation to `install.sh`. No behavior change for existing consumers.
+## What didn't change
+
+- `install.sh` — no self-registration needed; consumer config is the consumer's concern
+- `dogfood.yml` — no changes needed
+- `.vendored/configs/` — git-dogfood doesn't create consumer configs
+
+## Filed under
+
+`gdf-744b.4` in `docs/planning/epics/gdf-744b.md`

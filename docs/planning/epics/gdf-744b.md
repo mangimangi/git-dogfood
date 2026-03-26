@@ -232,6 +232,20 @@ when set. Add tests.
 
 Covers: section 6 above.
 
+### gdf-744b.4 — Remove config existence gate from resolve
+
+The resolve script gated on vendor config existence, which caused the dogfood loop
+to silently fail in fresh consumer repos (no config → no output → no install).
+
+The config gate was erroneous — the real gate is the workflow trigger (`dogfood.yml`
+only fires after Bump & Release). Resolve now unconditionally derives the vendor name
+from `GITHUB_REPOSITORY` and outputs it. If the consumer isn't set up for
+self-vendoring, `install-vendored` fails loudly downstream — which is correct.
+
+No self-registration in `install.sh` needed. Consumer config is the consumer's concern.
+
+Covers: `docs/planning/vendor-self-registration.md`
+
 ### Dependencies
 
 ```
@@ -240,10 +254,12 @@ gdf-744b.1 ──┬──> gdf-744b.2
 ```
 
 Issue 1 restructures paths and inputs; issues 2 and 3 are independent of each other.
+Issue 4 is independent of all others.
 
 ## Checklist
 
-- [ ] `gdf-744b.1`: V2 env vars + install dir + file placement + tests
-- [ ] `gdf-744b.2`: Remove version file + self-registration + tests
-- [ ] `gdf-744b.3`: Manifest emission + tests
+- [x] `gdf-744b.1`: V2 env vars + install dir + file placement + tests
+- [x] `gdf-744b.2`: Remove version file + self-registration + tests
+- [x] `gdf-744b.3`: Manifest emission + tests
+- [x] `gdf-744b.4`: Remove config existence gate from resolve + tests
 - [ ] Release: Tag new version
