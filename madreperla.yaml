@@ -1,6 +1,5 @@
-prefix: gdf
-eval:
-  threshold: 80
+description: "Automated install-on-release to self-install repo-embedded software via GitHub workflows"
+docs: [AGENTS.md, README.md, docs/]
 providers:
   issues:
     name: pearls
