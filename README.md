@@ -40,7 +40,7 @@ This creates:
 
 ## Configuration
 
-The resolve script matches `GITHUB_REPOSITORY` against each vendor's `repo` field to find the self-referencing vendor entry. It scans `.vendored/configs/*.json` (per-vendor config files) first, falling back to the monolithic `.vendored/config.json` for backwards compatibility.
+The resolve script derives the vendor name from `GITHUB_REPOSITORY` by convention: for `acme/my-tool`, the vendor is `my-tool`. This vendor name must match a config entry in `.vendored/configs/<vendor>.json` (or in the monolithic `.vendored/config.json` for backwards compatibility).
 
 Per-vendor config (`.vendored/configs/git-dogfood.json`):
 
