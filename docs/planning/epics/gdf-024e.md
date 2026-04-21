@@ -2,6 +2,10 @@
 
 > Per-repo planning doc for epic `gdf-024e`
 
+## Scoped issues
+
+- `gdf-024e.1` — Migrate docs/planning/ → .pearls/docs/ and simplify madreperla.yaml providers (covers all steps below as one atomic commit)
+
 ## Design decisions
 
 - **One issue**: entire migration is one atomic issue — config + move + regenerate + verify. No partial states.
