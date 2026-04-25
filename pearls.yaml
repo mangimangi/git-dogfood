@@ -1,7 +1,1 @@
 prefix: gdf
-docs:
-  planning: .pearls/docs
-  epics: .pearls/docs/epics
-  ideas: .pearls/docs/ideas
-  headaches: .pearls/docs/headaches
-  retros: .pearls/docs/retros
