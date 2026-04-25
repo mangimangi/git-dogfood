@@ -12,7 +12,7 @@
     ]
   },
   "version_file": "VERSION",
-  "files": ["dogfood/*", "templates/*", "install.sh"],
+  "files": ["dogfood/*", "templates/**", "install.sh"],
   "updates": {},
   "changelog": true
 }

@@ -1,6 +1,4 @@
 prefix: gdf
-eval:
-  threshold: 80
 docs:
   planning: .pearls/docs
   epics: .pearls/docs/epics
